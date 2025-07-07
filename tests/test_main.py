@@ -62,6 +62,14 @@ def test_add_product(sample_category):
     assert Category.product_count == 2
 
 
+def test_add_invalid_product(sample_category):
+    """Проверяет добавление невалидного объекта"""
+    with pytest.raises(TypeError) as exc_info:
+        sample_category.add_product("invalid product")
+    assert "Можно добавлять только объекты класса Product" in str(exc_info.value)
+    assert Category.product_count == 1  # Счетчик не должен измениться
+
+
 def test_price_validation(sample_product, capsys):
     sample_product.price = -50
     captured = capsys.readouterr()
