@@ -1,121 +1,114 @@
 import json
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 
 
 class Product:
-    def __init__(self, name: str, description: str, price: float, quantity: int):
+    def __init__(self, name, description, price, quantity):
         self.name = name
         self.description = description
-        self.__price = price  # Приватный атрибут
+        self.__price = price
         self.quantity = quantity
 
-    @classmethod
-    def new_product(
-        cls, product_data: Dict[str, Any], products: Optional[List["Product"]] = None
-    ) -> "Product":
-        """Создает новый продукт, обрабатывая дубликаты"""
-        name = product_data["name"]
-        price = product_data["price"]
-        quantity = product_data["quantity"]
-        description = product_data.get("description", "")
+    def __str__(self):
+        return f"{self.name}, {self.price} руб. Остаток: {self.quantity} шт."
 
-        if products:
-            for prod in products:
-                if prod.name == name:
-                    prod.quantity += quantity
-                    if prod.price < price:
-                        prod.price = price
-                    return prod
-
-        return cls(name, description, price, quantity)
+    def __add__(self, other):
+        if not isinstance(other, Product):
+            raise TypeError("Можно складывать только объекты класса Product")
+        return self.price * self.quantity + other.price * other.quantity
 
     @property
-    def price(self) -> float:
-        """Возвращает цену продукта"""
+    def price(self):
         return self.__price
 
     @price.setter
-    def price(self, new_price: float) -> None:
-        """Устанавливает цену с проверками"""
+    def price(self, new_price):
         if new_price <= 0:
             print("Цена не должна быть нулевая или отрицательная")
-            return
+        else:
+            if new_price < self.__price:
+                confirmation = input("Цена понижается. Подтвердите изменение (y/n): ")
+                if confirmation.lower() == "y":
+                    self.__price = new_price
+                else:
+                    print("Отмена изменения цены.")
+            else:
+                self.__price = new_price
 
-        if hasattr(self, "_Product__price") and new_price < self.__price:
-            confirm = input(
-                f"Цена снижается с {self.__price} до {new_price}. Подтвердите (y/n): "
-            )
-            if confirm.lower() != "y":
-                print("Отмена изменения цены.")
-                return
-
-        self.__price = new_price
+    @classmethod
+    def new_product(cls, product_data, products=None):
+        if products is None:
+            products = []
+        for product in products:
+            if product.name == product_data["name"]:
+                product.quantity += product_data["quantity"]
+                product.price = product_data["price"]
+                return product
+        return cls(**product_data)
 
 
 class Category:
-    category_count: int = 0
-    product_count: int = 0
+    category_count = 0
+    product_count = 0
 
-    def __init__(
-        self, name: str, description: str, products: Optional[List[Product]] = None
-    ):
+    def __init__(self, name, description, products=None):
         self.name = name
         self.description = description
         self.__products = products if products is not None else []
         Category.category_count += 1
         Category.product_count += len(self.__products)
 
-    def add_product(self, product: Product) -> None:
-        """Добавляет продукт в категорию"""
+    def __str__(self):
+        total_quantity = sum(product.quantity for product in self.__products)
+        return f"{self.name}, количество продуктов: {total_quantity} шт."
+
+    def add_product(self, product):
         if not isinstance(product, Product):
-            raise TypeError(
-                "Можно добавлять только объекты класса Product или его наследников"
-            )
+            raise TypeError("Можно добавлять только объекты класса Product")
         self.__products.append(product)
         Category.product_count += 1
 
     @property
-    def products(self) -> str:
-        """Возвращает строку с информацией о продуктах"""
-        return "\n".join(
-            f"{p.name}, {p.price} руб. Остаток: {p.quantity} шт."
-            for p in self.__products
-        )
+    def products(self):
+        return "\n".join(str(product) for product in self.__products)
+
+    def __iter__(self):
+        return CategoryIterator(self.__products)
 
 
-def load_categories_from_json(file_path: str) -> List[Category]:
-    """Загружает категории из JSON файла"""
+class CategoryIterator:
+    def __init__(self, products):
+        self.products = products
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index < len(self.products):
+            product = self.products[self.index]
+            self.index += 1
+            return product
+        raise StopIteration
+
+
+def load_categories_from_json(file_path):
     path = Path(file_path)
     if not path.exists():
-        raise FileNotFoundError(f"Файл {file_path} не найден!")
+        raise FileNotFoundError(f"Файл {file_path} не найден")
 
-    try:
-        with open(path, "r", encoding="utf-8") as file:
-            data = json.load(file)
-    except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(
-            f"Ошибка в формате JSON файла {file_path}", e.doc, e.pos
-        )
+    with open(path, "r", encoding="utf-8") as file:
+        data = json.load(file)
 
     categories = []
     for category_data in data:
         products = [
-            Product(
-                name=product_data["name"],
-                description=product_data["description"],
-                price=product_data["price"],
-                quantity=product_data["quantity"],
-            )
-            for product_data in category_data["products"]
+            Product(**product_data) for product_data in category_data["products"]
         ]
         categories.append(
-            Category(
-                name=category_data["name"],
-                description=category_data["description"],
-                products=products,
-            )
+            Category(category_data["name"], category_data["description"], products)
         )
+
     return categories
 
 

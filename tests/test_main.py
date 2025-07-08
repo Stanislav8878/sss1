@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from main import Product, Category, load_categories_from_json
+from main import Product, Category, load_categories_from_json, CategoryIterator
 from unittest.mock import patch
 import json
 
@@ -63,11 +63,10 @@ def test_add_product(sample_category):
 
 
 def test_add_invalid_product(sample_category):
-    """Проверяет добавление невалидного объекта"""
     with pytest.raises(TypeError) as exc_info:
         sample_category.add_product("invalid product")
     assert "Можно добавлять только объекты класса Product" in str(exc_info.value)
-    assert Category.product_count == 1  # Счетчик не должен измениться
+    assert Category.product_count == 1
 
 
 def test_price_validation(sample_product, capsys):
@@ -100,14 +99,24 @@ def test_price_decrease_cancel(mock_input, sample_product, capsys):
 
 def test_new_product_duplicate():
     existing_product = Product("Duplicate", "Desc", 50.0, 10)
-    new_data = {"name": "Duplicate", "price": 60.0, "quantity": 5}
+    new_data = {
+        "name": "Duplicate",
+        "description": "New Desc",
+        "price": 60.0,
+        "quantity": 5
+    }
     result = Product.new_product(new_data, [existing_product])
     assert result.quantity == 15
     assert result.price == 60.0
 
 
 def test_new_product_no_duplicate():
-    new_data = {"name": "New", "price": 100.0, "quantity": 5}
+    new_data = {
+        "name": "New",
+        "description": "New Desc",  # Добавлено обязательное поле description
+        "price": 100.0,
+        "quantity": 5
+    }
     result = Product.new_product(new_data)
     assert result.name == "New"
     assert result.price == 100.0
@@ -141,3 +150,40 @@ def test_empty_category():
     assert category.products == ""
     assert Category.category_count == 1
     assert Category.product_count == 0
+
+
+def test_product_str(sample_product):
+    assert str(sample_product) == "Test, 100.0 руб. Остаток: 10 шт."
+
+
+def test_category_str(sample_category):
+    assert str(sample_category) == "Test Cat, количество продуктов: 10 шт."
+
+
+def test_product_addition(sample_product):
+    product2 = Product("Test2", "Desc2", 50.0, 5)
+    assert sample_product + product2 == 100.0 * 10 + 50.0 * 5
+
+
+def test_product_addition_invalid_type(sample_product):
+    with pytest.raises(TypeError) as exc_info:
+        sample_product + "invalid"
+    assert "Можно складывать только объекты класса Product" in str(exc_info.value)
+
+
+def test_category_iterator(sample_category):
+    products = list(sample_category)
+    assert len(products) == 1
+    assert products[0].name == "Test"
+
+
+def test_category_iterator_empty():
+    empty_category = Category("Empty", "Empty desc")
+    products = list(empty_category)
+    assert len(products) == 0
+
+
+def test_category_iterator_class():
+    products = [Product("A", "Desc", 100, 5), Product("B", "Desc", 200, 3)]
+    iterator = CategoryIterator(products)
+    assert list(iterator) == products
