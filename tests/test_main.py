@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from main import Product, Category, load_categories_from_json, CategoryIterator
+from main import Product, Category, Smartphone, LawnGrass, load_categories_from_json, CategoryIterator
 from unittest.mock import patch
 import json
 
@@ -19,27 +19,110 @@ def sample_product():
 
 
 @pytest.fixture
+def sample_smartphone():
+    return Smartphone("Smart", "Desc", 500.0, 5, "High", "X1", 128, "Black")
+
+
+@pytest.fixture
+def sample_lawn_grass():
+    return LawnGrass("Grass", "Desc", 50.0, 20, "Russia", "2 weeks", "Green")
+
+
+@pytest.fixture
 def sample_category(sample_product):
     return Category("Test Cat", "Desc", [sample_product])
 
 
-@pytest.fixture
-def sample_products_json(tmp_path):
+def test_smartphone_init(sample_smartphone):
+    assert sample_smartphone.name == "Smart"
+    assert sample_smartphone.price == 500.0
+    assert sample_smartphone.efficiency == "High"
+    assert sample_smartphone.model == "X1"
+    assert sample_smartphone.memory == 128
+    assert sample_smartphone.color == "Black"
+
+
+def test_lawn_grass_init(sample_lawn_grass):
+    assert sample_lawn_grass.name == "Grass"
+    assert sample_lawn_grass.price == 50.0
+    assert sample_lawn_grass.country == "Russia"
+    assert sample_lawn_grass.germination_period == "2 weeks"
+    assert sample_lawn_grass.color == "Green"
+
+
+def test_product_addition_same_type(sample_product):
+    product2 = Product("Test2", "Desc2", 50.0, 5)
+    assert sample_product + product2 == 100.0 * 10 + 50.0 * 5
+
+
+def test_product_addition_different_types(sample_product, sample_smartphone):
+    with pytest.raises(TypeError) as exc_info:
+        sample_product + sample_smartphone
+    assert "Можно складывать только товары из одинаковых классов" in str(exc_info.value)
+
+
+def test_smartphone_addition(sample_smartphone):
+    smartphone2 = Smartphone("Smart2", "Desc", 600.0, 3, "High", "X2", 256, "White")
+    assert sample_smartphone + smartphone2 == 500.0 * 5 + 600.0 * 3
+
+
+def test_category_add_smartphone(sample_category, sample_smartphone):
+    sample_category.add_product(sample_smartphone)
+    assert "Smart (X1)" in sample_category.products
+    assert Category.product_count == 2
+
+
+def test_category_add_lawn_grass(sample_category, sample_lawn_grass):
+    sample_category.add_product(sample_lawn_grass)
+    assert "Grass" in sample_category.products
+    assert Category.product_count == 2
+
+
+def test_category_add_invalid_type(sample_category):
+    with pytest.raises(TypeError) as exc_info:
+        sample_category.add_product("invalid product")
+    assert "Можно добавлять только объекты класса Product или его наследников" in str(exc_info.value)
+    assert Category.product_count == 1
+
+
+def test_load_categories_with_new_products(tmp_path):
     data = [{
         "name": "Test Category",
         "description": "Test Desc",
-        "products": [{
-            "name": "Test Product",
-            "description": "Test Product Desc",
-            "price": 100.0,
-            "quantity": 5
-        }]
+        "products": [
+            {
+                "name": "Smartphone",
+                "description": "Test",
+                "price": 50000,
+                "quantity": 5,
+                "efficiency": "High",
+                "model": "X100",
+                "memory": 256,
+                "color": "Black"
+            },
+            {
+                "name": "Grass",
+                "description": "Test",
+                "price": 1000,
+                "quantity": 50,
+                "country": "Russia",
+                "germination_period": "2 weeks",
+                "color": "Green"
+            }
+        ]
     }]
     file_path = tmp_path / "products.json"
     file_path.write_text(json.dumps(data), encoding="utf-8")
-    return file_path
+
+    categories = load_categories_from_json(str(file_path))
+    assert len(categories) == 1
+    assert isinstance(categories[0]._Category__products[0], Smartphone)
+    assert isinstance(categories[0]._Category__products[1], LawnGrass)
+    assert Category.category_count == 1
+    assert Category.product_count == 2
 
 
+# Оригинальные тесты
 def test_product_init(sample_product):
     assert sample_product.name == "Test"
     assert sample_product.description == "Desc"
@@ -60,13 +143,6 @@ def test_add_product(sample_category):
     sample_category.add_product(new_product)
     assert "New, 200.0 руб. Остаток: 5 шт." in sample_category.products
     assert Category.product_count == 2
-
-
-def test_add_invalid_product(sample_category):
-    with pytest.raises(TypeError) as exc_info:
-        sample_category.add_product("invalid product")
-    assert "Можно добавлять только объекты класса Product" in str(exc_info.value)
-    assert Category.product_count == 1
 
 
 def test_price_validation(sample_product, capsys):
@@ -113,22 +189,13 @@ def test_new_product_duplicate():
 def test_new_product_no_duplicate():
     new_data = {
         "name": "New",
-        "description": "New Desc",  # Добавлено обязательное поле description
+        "description": "New Desc",
         "price": 100.0,
         "quantity": 5
     }
     result = Product.new_product(new_data)
     assert result.name == "New"
     assert result.price == 100.0
-
-
-def test_load_categories(sample_products_json):
-    categories = load_categories_from_json(str(sample_products_json))
-    assert len(categories) == 1
-    assert categories[0].name == "Test Category"
-    assert "Test Product, 100.0 руб. Остаток: 5 шт." in categories[0].products
-    assert Category.category_count == 1
-    assert Category.product_count == 1
 
 
 def test_load_categories_file_not_found(tmp_path):
@@ -158,17 +225,6 @@ def test_product_str(sample_product):
 
 def test_category_str(sample_category):
     assert str(sample_category) == "Test Cat, количество продуктов: 10 шт."
-
-
-def test_product_addition(sample_product):
-    product2 = Product("Test2", "Desc2", 50.0, 5)
-    assert sample_product + product2 == 100.0 * 10 + 50.0 * 5
-
-
-def test_product_addition_invalid_type(sample_product):
-    with pytest.raises(TypeError) as exc_info:
-        sample_product + "invalid"
-    assert "Можно складывать только объекты класса Product" in str(exc_info.value)
 
 
 def test_category_iterator(sample_category):

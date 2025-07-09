@@ -15,6 +15,8 @@ class Product:
     def __add__(self, other):
         if not isinstance(other, Product):
             raise TypeError("Можно складывать только объекты класса Product")
+        if self.__class__ != other.__class__:
+            raise TypeError("Можно складывать только товары из одинаковых классов")
         return self.price * self.quantity + other.price * other.quantity
 
     @property
@@ -47,6 +49,39 @@ class Product:
         return cls(**product_data)
 
 
+class Smartphone(Product):
+    def __init__(
+        self, name, description, price, quantity, efficiency, model, memory, color
+    ):
+        super().__init__(name, description, price, quantity)
+        self.efficiency = efficiency
+        self.model = model
+        self.memory = memory
+        self.color = color
+
+    def __str__(self):
+        return (
+            f"{self.name} ({self.model}), {self.price} руб. Остаток: {self.quantity} шт. "
+            f"Характеристики: {self.memory}GB, {self.color}, производительность: {self.efficiency}"
+        )
+
+
+class LawnGrass(Product):
+    def __init__(
+        self, name, description, price, quantity, country, germination_period, color
+    ):
+        super().__init__(name, description, price, quantity)
+        self.country = country
+        self.germination_period = germination_period
+        self.color = color
+
+    def __str__(self):
+        return (
+            f"{self.name}, {self.price} руб. Остаток: {self.quantity} шт. "
+            f"Производитель: {self.country}, срок прорастания: {self.germination_period}, цвет: {self.color}"
+        )
+
+
 class Category:
     category_count = 0
     product_count = 0
@@ -64,7 +99,9 @@ class Category:
 
     def add_product(self, product):
         if not isinstance(product, Product):
-            raise TypeError("Можно добавлять только объекты класса Product")
+            raise TypeError(
+                "Можно добавлять только объекты класса Product или его наследников"
+            )
         self.__products.append(product)
         Category.product_count += 1
 
@@ -102,9 +139,14 @@ def load_categories_from_json(file_path):
 
     categories = []
     for category_data in data:
-        products = [
-            Product(**product_data) for product_data in category_data["products"]
-        ]
+        products = []
+        for product_data in category_data["products"]:
+            if "efficiency" in product_data:  # Это смартфон
+                products.append(Smartphone(**product_data))
+            elif "country" in product_data:  # Это газонная трава
+                products.append(LawnGrass(**product_data))
+            else:  # Обычный продукт
+                products.append(Product(**product_data))
         categories.append(
             Category(category_data["name"], category_data["description"], products)
         )
@@ -113,10 +155,8 @@ def load_categories_from_json(file_path):
 
 
 if __name__ == "__main__":
-    # Пример использования
     try:
         categories = load_categories_from_json("products.json")
-
         for category in categories:
             print(f"Категория: {category.name}")
             print(f"Описание: {category.description}")
