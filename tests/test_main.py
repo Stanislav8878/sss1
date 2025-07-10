@@ -3,7 +3,8 @@ from pathlib import Path
 from main import (
     Product, Category, Smartphone, LawnGrass,
     load_categories_from_json, CategoryIterator,
-    BaseProduct, ReprMixin, Order, BaseEntity, EnhancedCategory
+    BaseProduct, ReprMixin, Order, BaseEntity, EnhancedCategory,
+    ZeroQuantityError
 )
 from unittest.mock import patch
 import json
@@ -73,6 +74,13 @@ def test_order_invalid_product():
     assert "Заказ может содержать только объекты класса Product" in str(exc_info.value)
 
 
+def test_order_zero_quantity(sample_product):
+    """Тест обработки нулевого количества в заказе"""
+    with pytest.raises(ZeroQuantityError) as exc_info:
+        Order(sample_product, 0)
+    assert "Нельзя создать заказ с нулевым количеством товара" in str(exc_info.value)
+
+
 def test_base_entity_abc():
     """Тест, что BaseEntity является абстрактным классом"""
     with pytest.raises(TypeError):
@@ -95,6 +103,13 @@ def test_product_init(sample_product):
     assert sample_product.quantity == 10
 
 
+def test_product_zero_quantity():
+    """Тест создания товара с нулевым количеством"""
+    with pytest.raises(ValueError) as exc_info:
+        Product("Test", "Desc", 100.0, 0)
+    assert "Товар с нулевым количеством не может быть добавлен" in str(exc_info.value)
+
+
 def test_category_init(sample_category):
     assert sample_category.name == "Test Cat"
     assert sample_category.description == "Desc"
@@ -109,6 +124,19 @@ def test_add_product(sample_category):
     sample_category.add_product(new_product)
     assert "New, 200.0 руб. Остаток: 5 шт." in sample_category.products
     assert Category.product_count == 2
+
+
+def test_add_product_zero_quantity(sample_category, capsys):
+    """Тест добавления товара с нулевым количеством"""
+    with patch('builtins.print'):
+        zero_product = Product("Zero", "Desc", 100.0, 1)
+        zero_product.quantity = 0
+
+    sample_category.add_product(zero_product)
+    captured = capsys.readouterr()
+    assert "Нельзя добавить товар с нулевым количеством" in captured.out
+    assert "Обработка добавления товара завершена" in captured.out
+    assert Category.product_count == 1
 
 
 def test_price_validation(sample_product, capsys):
@@ -261,11 +289,22 @@ def test_category_add_lawn_grass(sample_category, sample_lawn_grass):
     assert Category.product_count == 2
 
 
-def test_category_add_invalid_type(sample_category):
-    with pytest.raises(TypeError) as exc_info:
-        sample_category.add_product("invalid product")
-    assert "Можно добавлять только объекты класса Product или его наследников" in str(exc_info.value)
+def test_category_add_invalid_type(sample_category, capsys):
+    """Тест обработки неверного типа продукта в категории"""
+    sample_category.add_product("invalid product")
+    captured = capsys.readouterr()
+    assert "Можно добавлять только объекты класса Product или его наследников" in captured.out
+    assert "Обработка добавления товара завершена" in captured.out
     assert Category.product_count == 1
+
+
+def test_category_average_price(sample_category):
+    assert sample_category.average_price() == 100.0
+
+
+def test_category_average_price_empty():
+    empty_category = Category("Empty", "Empty desc")
+    assert empty_category.average_price() == 0
 
 
 def test_load_categories_with_new_products(tmp_path):

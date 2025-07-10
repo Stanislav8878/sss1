@@ -15,11 +15,17 @@ class ReprMixin:
         super().__init__(*args, **kwargs)
 
 
+class ZeroQuantityError(Exception):
+    """Исключение для товаров с нулевым количеством"""
+
+    pass
+
+
 class BaseProduct(ABC):
     def __init__(self, name, description, price, quantity):
         self.name = name
         self.description = description
-        self._price = price  # Изменено с __price на _price
+        self._price = price
         self.quantity = quantity
 
     @abstractmethod
@@ -39,6 +45,8 @@ class BaseProduct(ABC):
 
 class Product(BaseProduct, ReprMixin):
     def __init__(self, name, description, price, quantity):
+        if quantity <= 0:
+            raise ValueError("Товар с нулевым количеством не может быть добавлен")
         super().__init__(name, description, price, quantity)
 
     def __str__(self):
@@ -130,16 +138,32 @@ class Category:
         return f"{self.name}, количество продуктов: {total_quantity} шт."
 
     def add_product(self, product):
-        if not isinstance(product, Product):
-            raise TypeError(
-                "Можно добавлять только объекты класса Product или его наследников"
-            )
-        self.__products.append(product)
-        Category.product_count += 1
+        try:
+            if not isinstance(product, Product):
+                raise TypeError(
+                    "Можно добавлять только объекты класса Product или его наследников"
+                )
+            if product.quantity <= 0:
+                raise ZeroQuantityError("Нельзя добавить товар с нулевым количеством")
+
+            self.__products.append(product)
+            Category.product_count += 1
+            print(f"Товар {product.name} успешно добавлен")
+        except (TypeError, ZeroQuantityError) as e:
+            print(f"Ошибка: {e}")
+        finally:
+            print("Обработка добавления товара завершена")
 
     @property
     def products(self):
         return "\n".join(str(product) for product in self.__products)
+
+    def average_price(self):
+        try:
+            total = sum(product.price for product in self.__products)
+            return total / len(self.__products)
+        except ZeroDivisionError:
+            return 0
 
     def __iter__(self):
         return CategoryIterator(self.__products)
@@ -165,6 +189,8 @@ class Order:
     def __init__(self, product, quantity):
         if not isinstance(product, Product):
             raise TypeError("Заказ может содержать только объекты класса Product")
+        if quantity <= 0:
+            raise ZeroQuantityError("Нельзя создать заказ с нулевым количеством товара")
         self.product = product
         self.quantity = quantity
         self.total_price = product.price * quantity
@@ -232,6 +258,7 @@ if __name__ == "__main__":
             print(f"Описание: {category.description}")
             print("Товары:")
             print(category.products)
+            print(f"Средняя цена: {category.average_price()}")
             print()
 
         print(f"Всего категорий: {Category.category_count}")
